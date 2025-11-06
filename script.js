@@ -1,104 +1,141 @@
-document.addEventListener('DOMContentLoaded', () => {
+/* Configurações Globais */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
 
-    // --- REFERÊNCIAS AOS ELEMENTOS DO HTML ---
-    const chatMessages = document.getElementById('chat-messages');
-    const chatOptions = document.getElementById('chat-options');
+body {
+    background-color: #f3f3f3; /* Cor de fundo off-white */
+    color: #fff;
+}
 
-    // --- CONSTANTES DE LINKS E ÍCONES ---
-    const BOT_ICON_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRL7d1tVe34hH7WxuBvKRlXDF-GetD5U5eWxg&s';
-    
-    // Links de "Desconto na Fatura"
-    const LINK_CADASTRO_DESCONTO = 'https://igreenconection-off.github.io/IGREENCONECTION/';
-    const WA_DUVIDAS_CADASTRO = 'https://wa.me/5584920039738?text=Ol%C3%A1!%20J%C3%A1%20fiz%20o%20cadastro%20do%20desconto%20na%20fatura%20e%20desejo%20tirar%20d%C3%BAvidas.';
-    const WA_AJUDA_CADASTRO = 'https://wa.me/5584920039738?text=Ol%C3%A1!%20Desejo%20me%20cadastrar%20para%20obter%20o%20desconto%20na%20fatura%20de%20energia.%20Tentei%20s%C3%B3%20e%20n%C3%A3o%20consegui.';
+/* Cabeçalho */
+header {
+    background-color: #70BB50; /* Faixa verde */
+    padding: 20px 10px;
+    text-align: center;
+    width: 100%;
+}
 
-    // Links de "iGreen Telecom"
-    const WA_NOVO_CHIP = 'https://wa.me/5584920039738?text=Ol%C3%A1!%20Desejo%20contratar%20um%20novo%20chip%20iGreen%20Telecom,%20pode%20me%20ajudar?';
-    const WA_PORTABILIDADE = 'https://wa.me/5584920039738?text=Ol%C3%A1!%20Desejo%20solicitar%20a%20portabilidade%20do%20meu%20n%C3%BAmero%20para%20a%20iGreen%20Telecom.%20Pode%20me%20ajudar?';
-    const WA_SUPORTE_TELECOM = 'https://wa.me/558001830080?text=Ol%C3%A1!%20J%C3%A1%20sou%20cliente%20iGreen%20Telecom%20e%20desejo%20suporte.';
+header img {
+    max-width: 250px; /* Tamanho do logo */
+    height: auto;
+}
 
-    // Link "Ser Divulgador" (adicionado ?embedded=true)
-    const FORM_DIVULGADOR = 'https://docs.google.com/forms/d/e/1FAIpQLScRb0k71iMQxP56I54euwRW8tnxcJVqBujT0du4wtFgCHUC4g/viewform?embedded=true';
+/* Container Principal do Chat */
+main {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 30px 15px;
+}
 
-    // Link "Trabalhe Conosco"
-    const WA_TRABALHE_CONOSCO = 'https://wa.me/5584920039738?text=Ol%C3%A1!%20Desejo%20me%20tornar%20um%20franquiado%20e%20trabalhar%20com%20a%20iGreen%20Energy%20na%20minha%20cidade.%20Pode%20me%20explicar%20mais%20sobre%20os%20produtos%20que%20a%20empresa%20oferta,%20e%20como%20funciona%20o%20processo%20de%20compra%20da%20franquia?';
-    
-    // --- NOVO --- Link para o Bot de Placas Solares
-    const LINK_BOT_PLACAS_SOLARES = 'https://igreenconection-off.github.io/conex-oplacasesolar/';
+#chat-container {
+    width: 100%;
+    max-width: 700px;
+    background-color: #192315; /* Verde acinzentado */
+    border: 2px solid #70BB50; /* Contorno verde */
+    border-radius: 15px; /* Cantos arredondados */
+    overflow: hidden; /* Garante que os filhos respeitem os cantos */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
 
-    // Botão reutilizável
-    const MENU_PRINCIPAL_BTN = { text: 'Menu Principal', action: startChat };
+/* Área de Mensagens */
+#chat-messages {
+    height: 450px;
+    overflow-y: auto; /* Permite rolar as mensagens */
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
 
-    // --- FUNÇÕES AUXILIARES ---
+/* Estilo das Mensagens */
+.message {
+    padding: 12px 18px;
+    border-radius: 18px;
+    max-width: 85%;
+    line-height: 1.5;
+}
 
-    /** Rola o chat para a última mensagem */
-    function scrollToBottom() {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+/* Mensagem do Bot */
+.bot-message-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    align-self: flex-start;
+}
 
-    /** Limpa todos os botões de opção */
-    function clearOptions() {
-        chatOptions.innerHTML = '';
-    }
+.bot-icon {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-top: 5px;
+}
 
-    /** Adiciona uma mensagem do BOT ao chat */
-    function addBotMessage(message, delay = 500) {
-        return new Promise(resolve => {
-            setTimeout(() => {
-                const msgContainer = document.createElement('div');
-                msgContainer.className = 'bot-message-container';
+.bot-message {
+    background-color: #3a3a3a; /* Fundo do balão do bot */
+    border-top-left-radius: 0;
+}
 
-                msgContainer.innerHTML = `
-                    <img src="${BOT_ICON_URL}" alt="Bot" class="bot-icon">
-                    <div class="message bot-message">${message}</div>
-                `;
-                chatMessages.appendChild(msgContainer);
-                scrollToBottom();
-                resolve();
-            }, delay);
-        });
-    }
+/* Mensagem do Usuário */
+.user-message {
+    background-color: #70BB50; /* Fundo do balão do usuário */
+    color: #192315; /* Texto escuro no balão verde */
+    align-self: flex-end; /* Alinha à direita */
+    border-top-right-radius: 0;
+    font-weight: bold;
+}
 
-    /** Adiciona uma mensagem do USUÁRIO ao chat */
-    function addUserMessage(message) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message user-message';
-        msgDiv.textContent = message;
-        chatMessages.appendChild(msgDiv);
-        scrollToBottom();
-    }
+/* Container do Formulário */
+.form-container {
+    width: 100%;
+    padding: 10px 0;
+}
 
-    /** Adiciona os botões de opção */
-    function addOptions(options) {
-        clearOptions();
-        options.forEach(option => {
-            const button = document.createElement('button');
-            button.className = 'option-button';
-            button.textContent = option.text;
-            button.onclick = option.action;
-            chatOptions.appendChild(button);
-        });
-    }
+#google-form {
+    width: 100%;
+    height: 400px; /* Altura do formulário */
+    border: none;
+    border-radius: 8px;
+}
 
-    /** Adiciona um formulário iframe ao chat */
-    function addForm(url) {
-        const formContainer = document.createElement('div');
-        formContainer.className = 'form-container';
-        formContainer.innerHTML = `<iframe id="google-form" src="${url}">Carregando formulário...</iframe>`;
-        chatMessages.appendChild(formContainer);
-        scrollToBottom();
-    }
+/* Mensagem de Fim de Chat */
+.end-message {
+    text-align: center;
+    font-style: italic;
+    color: #aaa;
+    padding: 10px;
+    font-size: 0.9em;
+}
 
-    // --- FUNÇÕES DE FLUXO DO CHAT ---
+/* Área de Opções (Botões) */
+#chat-options {
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    border-top: 1px solid #333; /* Linha divisória */
+}
 
-    /** Inicia ou reinicia o chat */
-    function startChat() {
-        chatMessages.innerHTML = '';
-        clearOptions();
-        addBotMessage("Olá, seja bem-vindo(a) à iGreen Energy. Sobre o que vamos conversar hoje?", 200).then(() => {
-            addOptions([
-                { text: 'Desconto na fatura de energia', action: handleDescontoFatura },
-                { text: 'iGreen Telecom', action: handleTelecom },
-                { text: 'Compra de placas solares', action: handlePlacasSolares },
-                { text: 'Aluguel de telhado', action: handleAluguelTelhado },
-                { text: 'Ser divulgador', action: handleSerDivulg
+.option-button {
+    background-color: #70BB50;
+    color: #192315;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1em;
+    transition: background-color 0.3s;
+}
+
+.option-button:hover {
+    background-color: #8ade6a; /* Efeito hover */
+}
