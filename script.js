@@ -2,7 +2,7 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlssLoEsrUQOoN
 
 let dbRespostas = [];
 let dbGlossario = [];
-let contextoAtual = "geral"; // Contexto inicial
+let contextoAtual = "geral"; 
 let isLearningMode = false;
 let lastUserMessage = "";
 
@@ -17,7 +17,7 @@ async function loadData() {
         const data = await r.json();
         dbRespostas = data.respostas;
         dbGlossario = data.glossario;
-        console.log("Sistema de Inteligência Carregado.");
+        console.log("Sistema de Inteligência Conectado.");
     } catch (e) { console.error("Erro ao carregar banco."); }
 }
 
@@ -37,61 +37,74 @@ function processLogic(text) {
     }
 
     const inputNormalizado = normalizarTexto(text);
+    let palavrasDoUsuario = inputNormalizado.split(/\s+/);
     
-    // 1. TRADUÇÃO POR SINÔNIMOS (O pulo do gato)
-    // O bot percorre o glossário e vê se algum sinônimo bate com o contexto atual
-    let palavrasProcessadas = inputNormalizado.split(" ");
+    // 1. EXPANSÃO POR SINÔNIMOS
+    // Adicionamos as "palavras-mestre" ao que o usuário disse baseado no glossário
+    let termosExpandidos = [...palavrasDoUsuario];
     dbGlossario.forEach(item => {
         const sinonimos = item.sinonimos.toString().toLowerCase().split(",").map(s => s.trim());
-        const contextosPermitidos = item.contexto.toString().toLowerCase().split(",").map(c => c.trim());
+        const contextosDoSinonimo = item.contexto.toString().toLowerCase().split(",").map(c => c.trim());
 
-        // Se o contexto do glossário bate com o contexto atual (ou é geral)
-        if (contextosPermitidos.includes(contextoAtual) || contextosPermitidos.includes("geral")) {
-            sinonimos.forEach(s => {
-                if (inputNormalizado.includes(s)) {
-                    // Substitui o sinônimo pela palavra-mestre no texto de busca
-                    palavrasProcessadas.push(item.palavra.toLowerCase());
+        // Se o usuário usou um sinônimo, adicionamos a palavra principal à busca
+        sinonimos.forEach(s => {
+            if (inputNormalizado.includes(s)) {
+                termosExpandidos.push(item.palavra.toLowerCase());
+                // Se o sinônimo tem um contexto forte, isso ajuda a mudar o contexto
+                if (!contextosDoSinonimo.includes("geral")) {
+                    contextoAtual = contextosDoSinonimo[0]; 
                 }
-            });
-        }
+            }
+        });
     });
 
-    const textoFinalParaBusca = palavrasProcessadas.join(" ");
+    const buscaFinal = termosExpandidos.join(" ");
 
-    // 2. BUSCA POR PONTUAÇÃO E CONTEXTO
-    let melhorResposta = null;
-    let maiorPontuacao = 0;
+    // 2. BUSCA ROBUSTA (Pontuação por Relevância)
+    let melhorMatch = null;
+    let maiorScore = 0;
 
     dbRespostas.forEach(item => {
         let score = 0;
-        const ctxItem = item.contexto.toLowerCase();
-        const keywords = item.keywords.toLowerCase().split(",");
+        const ctxItem = item.contexto.toLowerCase().trim();
+        const keywords = item.keywords.toLowerCase().split(",").map(k => k.trim());
+        const perguntaItem = item.pergunta.toLowerCase();
 
-        // Peso 1: Bater o contexto atual (Filtro)
-        if (ctxItem === contextoAtual) score += 5;
+        // Bonus por Contexto (Se for o contexto atual, ganha vantagem, mas não é obrigatório)
+        if (ctxItem === contextoAtual) score += 3;
 
-        // Peso 2: Quantidade de palavras-chave encontradas
+        // Pontos por palavras-chave (O coração da lógica)
         keywords.forEach(key => {
-            if (textoFinalParaBusca.includes(key.trim())) score += 3;
+            if (buscaFinal.includes(key) && key.length > 1) {
+                score += 5; // Cada palavra-chave encontrada vale muito
+            }
         });
 
-        // Peso 3: Semelhança direta
-        if (textoFinalParaBusca.includes(item.pergunta.toLowerCase())) score += 10;
+        // Pontos por similaridade da frase
+        if (buscaFinal.includes(perguntaItem) || perguntaItem.includes(inputNormalizado)) {
+            score += 10;
+        }
 
-        if (score > maiorPontuacao) {
-            maiorPontuacao = score;
-            melhorResposta = item;
+        if (score > maiorScore) {
+            maiorScore = score;
+            melhorMatch = item;
         }
     });
 
-    // 3. DECISÃO
-    if (melhorResposta && maiorPontuacao > 8) { // Threshold de confiança
-        addMessageToChat(melhorResposta.resposta, "bot");
-        contextoAtual = melhorResposta.contexto; // O bot muda o contexto baseado na resposta dada
+    // 3. DECISÃO E MUDANÇA DE CONTEXTO
+    // Aumentamos o threshold para 5 para evitar respostas aleatórias
+    if (melhorMatch && maiorScore >= 5) {
+        addMessageToChat(melhorMatch.resposta, "bot");
+        
+        // Se a resposta encontrada pertence a outro contexto, o bot "muda de assunto"
+        if (melhorMatch.contexto.toLowerCase() !== contextoAtual) {
+            console.log("Mudando contexto para: " + melhorMatch.contexto);
+            contextoAtual = melhorMatch.contexto.toLowerCase();
+        }
     } else {
         isLearningMode = true;
         lastUserMessage = text;
-        addMessageToChat("Humm, entendi o que disse, mas não tenho certeza sobre isso no contexto de " + contextoAtual + ". Como eu deveria responder?", "bot");
+        addMessageToChat("Humm, não tenho certeza se entendi. Isso tem a ver com " + contextoAtual + " ou é outro assunto? Se puder, me explique melhor para eu aprender!", "bot");
     }
 }
 
@@ -100,14 +113,19 @@ function normalizarTexto(t) {
 }
 
 async function saveNewKnowledge(pergunta, resposta) {
-    addMessageToChat("Aprendendo...", "bot");
-    // Ao salvar, ele herda o contexto da conversa atual
+    addMessageToChat("Entendi! Vou guardar isso...", "bot");
+    
+    // Tenta adivinhar o contexto para salvar
     const url = `${APPS_SCRIPT_URL}?action=save&pergunta=${encodeURIComponent(pergunta)}&resposta=${encodeURIComponent(resposta)}&contexto=${contextoAtual}&keywords=${encodeURIComponent(pergunta.toLowerCase())}`;
     
-    await fetch(url, { mode: 'no-cors' });
-    addMessageToChat("Obrigado! Guardei isso no meu conhecimento sobre " + contextoAtual, "bot");
-    isLearningMode = false;
-    loadData();
+    try {
+        await fetch(url, { mode: 'no-cors' });
+        addMessageToChat("Prontinho! Aprendi que no contexto de " + contextoAtual + " a resposta é essa. Obrigado!", "bot");
+        isLearningMode = false;
+        loadData();
+    } catch (e) {
+        isLearningMode = false;
+    }
 }
 
 function addMessageToChat(text, sender) {
