@@ -1,141 +1,191 @@
-/* Configurações Globais */
 * {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
+    font-family: Arial, sans-serif; /* Fonte simples e legível */
 }
 
 body {
-    background-color: #f3f3f3; /* Cor de fundo off-white */
-    color: #fff;
-}
-
-/* Cabeçalho */
-header {
-    background-color: #70BB50; /* Faixa verde */
-    padding: 20px 10px;
-    text-align: center;
-    width: 100%;
-}
-
-header img {
-    max-width: 250px; /* Tamanho do logo */
-    height: auto;
-}
-
-/* Container Principal do Chat */
-main {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 30px 15px;
-}
-
-#chat-container {
-    width: 100%;
-    max-width: 700px;
-    background-color: #192315; /* Verde acinzentado */
-    border: 2px solid #70BB50; /* Contorno verde */
-    border-radius: 15px; /* Cantos arredondados */
-    overflow: hidden; /* Garante que os filhos respeitem os cantos */
+    background-color: #f7f7f7;
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
-/* Área de Mensagens */
-#chat-messages {
-    height: 450px;
+/* --- Cabeçalho Fixo --- */
+.main-header {
+    background-color: #122b15;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 15px;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.logo {
+    max-height: 40px; /* Limita a altura para não escapar */
+    max-width: 120px;
+    object-fit: contain;
+}
+
+.home-btn {
+    color: white;
+    text-decoration: none;
+    background: rgba(255,255,255,0.1);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    transition: 0.3s;
+}
+
+.home-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* --- Sub-cabeçalho (Info do Bot) --- */
+.chat-header {
+    margin-top: 60px; /* Espaço para o header fixo */
+    background-color: #fafafa;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.avatar-container img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%; /* Faz o círculo */
+    border: 2px solid #122b15;
+    object-fit: cover;
+    margin-right: 10px;
+}
+
+.bot-name {
+    font-weight: bold;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+/* --- Área de Chat e Backgrounds --- */
+.chat-container {
+    flex: 1;
+    padding: 15px;
     overflow-y: auto; /* Permite rolar as mensagens */
-    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 15px;
+    
+    /* Imagem de fundo padrão (Mobile) */
+    background: url('https://i.pinimg.com/1200x/3a/4e/c5/3a4ec5aa390da3911e1eea9ee1bd9273.jpg');
+    background-size: cover;
+    background-position: center;
 }
 
-/* Estilo das Mensagens */
+/* Imagem de fundo para Desktop */
+@media (min-width: 768px) {
+    .chat-container {
+        background: url('https://wallpapercave.com/wp/wp2747953.jpg');
+        background-size: cover;
+    }
+}
+
+/* --- Balões de Mensagem --- */
 .message {
-    padding: 12px 18px;
-    border-radius: 18px;
-    max-width: 85%;
-    line-height: 1.5;
-}
-
-/* Mensagem do Bot */
-.bot-message-container {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    align-self: flex-start;
-}
-
-.bot-icon {
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-top: 5px;
+    align-items: flex-end;
+    max-width: 85%;
+    animation: fadeIn 0.3s ease;
 }
 
 .bot-message {
-    background-color: #3a3a3a; /* Fundo do balão do bot */
-    border-top-left-radius: 0;
+    align-self: flex-start;
 }
 
-/* Mensagem do Usuário */
 .user-message {
-    background-color: #70BB50; /* Fundo do balão do usuário */
-    color: #192315; /* Texto escuro no balão verde */
-    align-self: flex-end; /* Alinha à direita */
-    border-top-right-radius: 0;
-    font-weight: bold;
+    align-self: flex-end;
+    flex-direction: row-reverse; /* Avatar (se tivesse) ficaria na direita */
 }
 
-/* Container do Formulário */
-.form-container {
-    width: 100%;
-    padding: 10px 0;
+.msg-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    margin-right: 8px;
+    object-fit: cover;
 }
 
-#google-form {
-    width: 100%;
-    height: 400px; /* Altura do formulário */
-    border: none;
-    border-radius: 8px;
+.user-message .msg-avatar {
+    display: none; /* User não tem avatar no pedido */
 }
 
-/* Mensagem de Fim de Chat */
-.end-message {
-    text-align: center;
-    font-style: italic;
-    color: #aaa;
+.bubble {
+    padding: 12px 16px;
+    border-radius: 15px;
+    font-size: 1rem;
+    line-height: 1.4;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Cores dos balões */
+.bot-message .bubble {
+    background-color: #dcf8c6; /* Verde claro estilo WhatsApp/Bot */
+    color: #111;
+    border-top-left-radius: 2px;
+}
+
+.user-message .bubble {
+    background-color: #e6f2ff; /* Azul claro */
+    color: #111;
+    border-top-right-radius: 2px;
+}
+
+/* --- Input Inferior --- */
+.input-area {
+    background-color: white;
     padding: 10px;
-    font-size: 0.9em;
-}
-
-/* Área de Opções (Botões) */
-#chat-options {
-    padding: 20px;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
     gap: 10px;
-    border-top: 1px solid #333; /* Linha divisória */
+    border-top: 1px solid #ccc;
 }
 
-.option-button {
-    background-color: #70BB50;
-    color: #192315;
+#user-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    outline: none;
+    font-size: 1rem;
+}
+
+#user-input::placeholder {
+    color: #aaa;
+}
+
+#send-btn {
+    background-color: #122b15;
+    color: white;
     border: none;
-    padding: 12px 25px;
-    border-radius: 8px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
     cursor: pointer;
-    font-weight: bold;
-    font-size: 1em;
-    transition: background-color 0.3s;
+    font-size: 1.2rem;
+    transition: 0.2s;
 }
 
-.option-button:hover {
-    background-color: #8ade6a; /* Efeito hover */
+#send-btn:hover {
+    background-color: #1e4522;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
