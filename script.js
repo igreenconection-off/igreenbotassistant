@@ -1,135 +1,121 @@
-// *** SUBSTITUA PELA SUA URL DO GOOGLE APPS SCRIPT ***
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxp-HbdWNqdcMEWuo__GPSShvgOp_0fvaLMGDv0NT_Q6jLguD9msl1eqor2Q8mdDXje/exec'; 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlssLoEsrUQOoNogC-zv29uujWUnV-bV0D-g-OXRxpWWeUmsbrIjAetUVuTW5HjA33/exec';
 
-let knowledgeBase = [];
+let dbRespostas = [];
+let dbGlossario = [];
+let contextoAtual = "geral"; // Contexto inicial
 let isLearningMode = false;
-let questionBeingLearned = "";
+let lastUserMessage = "";
 
-window.onload = function() {
-    fetch(APPS_SCRIPT_URL)
-        .then(response => response.json())
-        .then(data => {
-            knowledgeBase = data;
-            console.log("Base carregada:", knowledgeBase);
-        })
-        .catch(error => console.error("Erro ao carregar:", error));
-        
-    // CORREÇÃO 1: Adicionando o evento de clique no botão via JS para funcionar no PC
-    document.getElementById("send-btn").addEventListener("click", sendMessage);
+window.onload = () => {
+    loadData();
+    document.getElementById("send-btn").onclick = sendMessage;
 };
 
-document.getElementById("user-input").addEventListener("keypress", function (e) {
-    if (e.key === "Enter") {
-        sendMessage();
-    }
-});
-
-function sendMessage() {
-    const inputField = document.getElementById("user-input");
-    const message = inputField.value.trim();
-
-    if (message === "") return;
-
-    addMessageToChat(message, "user");
-    inputField.value = "";
-
-    setTimeout(() => {
-        processMessage(message);
-    }, 600);
+async function loadData() {
+    try {
+        const r = await fetch(APPS_SCRIPT_URL);
+        const data = await r.json();
+        dbRespostas = data.respostas;
+        dbGlossario = data.glossario;
+        console.log("Sistema de Inteligência Carregado.");
+    } catch (e) { console.error("Erro ao carregar banco."); }
 }
 
-function processMessage(userText) {
+function sendMessage() {
+    const input = document.getElementById("user-input");
+    const val = input.value.trim();
+    if (!val) return;
+    addMessageToChat(val, "user");
+    input.value = "";
+    processLogic(val);
+}
+
+function processLogic(text) {
     if (isLearningMode) {
-        saveNewKnowledge(questionBeingLearned, userText);
+        saveNewKnowledge(lastUserMessage, text);
         return;
     }
 
-    const normalizedText = userText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const inputNormalizado = normalizarTexto(text);
     
-    let bestMatch = null;
-    let highestScore = 0;
+    // 1. TRADUÇÃO POR SINÔNIMOS (O pulo do gato)
+    // O bot percorre o glossário e vê se algum sinônimo bate com o contexto atual
+    let palavrasProcessadas = inputNormalizado.split(" ");
+    dbGlossario.forEach(item => {
+        const sinonimos = item.sinonimos.toString().toLowerCase().split(",").map(s => s.trim());
+        const contextosPermitidos = item.contexto.toString().toLowerCase().split(",").map(c => c.trim());
 
-    knowledgeBase.forEach(entry => {
-        let score = 0;
-        
-        // CORREÇÃO 2: Verificando palavras-chave
-        if (entry.keywords) {
-            // Se as keywords forem número ou data na planilha, converte para string
-            let strKeywords = entry.keywords.toString().toLowerCase();
-            const keywords = strKeywords.split(",").map(k => k.trim());
-            
-            keywords.forEach(word => {
-                // MUDANÇA AQUI: Alterado de > 2 para >= 2 para aceitar "Oi"
-                if (normalizedText.includes(word) && word.length >= 2) {
-                    score++;
+        // Se o contexto do glossário bate com o contexto atual (ou é geral)
+        if (contextosPermitidos.includes(contextoAtual) || contextosPermitidos.includes("geral")) {
+            sinonimos.forEach(s => {
+                if (inputNormalizado.includes(s)) {
+                    // Substitui o sinônimo pela palavra-mestre no texto de busca
+                    palavrasProcessadas.push(item.palavra.toLowerCase());
                 }
             });
         }
-        
-        // Verifica pergunta exata ou parcial
-        if (entry.pergunta && entry.pergunta.toString().toLowerCase().includes(normalizedText)) {
-            score += 3; // Aumentei o peso se a frase for parecida com a pergunta inteira
-        }
+    });
 
-        if (score > highestScore) {
-            highestScore = score;
-            bestMatch = entry;
+    const textoFinalParaBusca = palavrasProcessadas.join(" ");
+
+    // 2. BUSCA POR PONTUAÇÃO E CONTEXTO
+    let melhorResposta = null;
+    let maiorPontuacao = 0;
+
+    dbRespostas.forEach(item => {
+        let score = 0;
+        const ctxItem = item.contexto.toLowerCase();
+        const keywords = item.keywords.toLowerCase().split(",");
+
+        // Peso 1: Bater o contexto atual (Filtro)
+        if (ctxItem === contextoAtual) score += 5;
+
+        // Peso 2: Quantidade de palavras-chave encontradas
+        keywords.forEach(key => {
+            if (textoFinalParaBusca.includes(key.trim())) score += 3;
+        });
+
+        // Peso 3: Semelhança direta
+        if (textoFinalParaBusca.includes(item.pergunta.toLowerCase())) score += 10;
+
+        if (score > maiorPontuacao) {
+            maiorPontuacao = score;
+            melhorResposta = item;
         }
     });
 
-    if (bestMatch && highestScore > 0) {
-        addMessageToChat(bestMatch.resposta, "bot");
+    // 3. DECISÃO
+    if (melhorResposta && maiorPontuacao > 8) { // Threshold de confiança
+        addMessageToChat(melhorResposta.resposta, "bot");
+        contextoAtual = melhorResposta.contexto; // O bot muda o contexto baseado na resposta dada
     } else {
         isLearningMode = true;
-        questionBeingLearned = userText;
-        addMessageToChat("Humm, ainda não aprendi isso. Se você souber a resposta, me ensine enviando a resposta correta abaixo.", "bot");
+        lastUserMessage = text;
+        addMessageToChat("Humm, entendi o que disse, mas não tenho certeza sobre isso no contexto de " + contextoAtual + ". Como eu deveria responder?", "bot");
     }
 }
 
-function saveNewKnowledge(pergunta, resposta) {
-    addMessageToChat("Obrigado! Estou guardando essa informação...", "bot");
+function normalizarTexto(t) {
+    return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
-    // CORREÇÃO 3: Removendo o método POST. 
-    // Vamos enviar tudo via URL (GET) para evitar bloqueio de CORS do Google.
-    // O Apps Script vai receber isso no doGet e processar igual.
-    const url = `${APPS_SCRIPT_URL}?action=save&pergunta=${encodeURIComponent(pergunta)}&resposta=${encodeURIComponent(resposta)}`;
+async function saveNewKnowledge(pergunta, resposta) {
+    addMessageToChat("Aprendendo...", "bot");
+    // Ao salvar, ele herda o contexto da conversa atual
+    const url = `${APPS_SCRIPT_URL}?action=save&pergunta=${encodeURIComponent(pergunta)}&resposta=${encodeURIComponent(resposta)}&contexto=${contextoAtual}&keywords=${encodeURIComponent(pergunta.toLowerCase())}`;
     
-    // Removemos { method: "POST" }
-    fetch(url)
-    .then(response => {
-        // Se a resposta chegou aqui, deu certo
-        addMessageToChat("Prontinho! Aprendi. Pode testar perguntando de novo.", "bot");
-        
-        // Atualiza a memória local
-        knowledgeBase.push({
-            pergunta: pergunta,
-            resposta: resposta,
-            keywords: pergunta.toLowerCase() + ", " + resposta.toLowerCase() // Adiciona resposta nas keywords pra ajudar na busca futura
-        });
-        
-        isLearningMode = false;
-        questionBeingLearned = "";
-    })
-    .catch(error => {
-        console.error("Erro detalhado:", error);
-        // Mesmo com erro de rede aparente, às vezes o Google salva.
-        // Mas vamos avisar o usuário para tentar de novo.
-        addMessageToChat("Tive um probleminha de conexão, mas tentei anotar.", "bot");
-        isLearningMode = false;
-    });
+    await fetch(url, { mode: 'no-cors' });
+    addMessageToChat("Obrigado! Guardei isso no meu conhecimento sobre " + contextoAtual, "bot");
+    isLearningMode = false;
+    loadData();
 }
 
 function addMessageToChat(text, sender) {
-    const chatContainer = document.getElementById("chat-container");
-    const messageDiv = document.createElement("div");
-    messageDiv.classList.add("message", sender === "user" ? "user-message" : "bot-message");
-
-    let avatarHTML = "";
-    if (sender === "bot") {
-        avatarHTML = `<img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" class="msg-avatar">`;
-    }
-
-    messageDiv.innerHTML = `${avatarHTML}<div class="bubble">${text}</div>`;
-    chatContainer.appendChild(messageDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    const container = document.getElementById("chat-container");
+    const div = document.createElement("div");
+    div.className = `message ${sender}-message`;
+    const avatar = sender === "bot" ? `<img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" class="msg-avatar">` : "";
+    div.innerHTML = `${avatar}<div class="bubble">${text}</div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
 }
