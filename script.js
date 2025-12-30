@@ -1,104 +1,103 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlssLoEsrUQOoNogC-zv29uujWUnV-bV0D-g-OXRxpWWeUmsbrIjAetUVuTW5HjA33/exec'; // <--- Verifique se a URL termina em /exec
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC_3EZ9Re6mwvdx1G6RJIlT803GOzQ4VgrhuV6eyIhhohgX6dHJhHeTrZ4u4qeAWBc/exec';
 
-let dbRespostas = [];
-let dbGlossario = [];
-let contextoAtual = "geral";
+let db = { respostas: [], contextos: [], glossario: [] };
+let contextoAtual = "saudação";
 
 window.onload = () => {
     loadData();
-    document.getElementById("send-btn").onclick = sendMessage;
+    // Garante que o botão Enviar e a tecla Enter funcionem
+    document.getElementById("send-btn").addEventListener("click", sendMessage);
+    document.getElementById("user-input").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMessage();
+    });
 };
 
-// Carrega os dados do Google Sheets
 async function loadData() {
     try {
         const r = await fetch(APPS_SCRIPT_URL);
-        const data = await r.json();
-        dbRespostas = data.respostas;
-        dbGlossario = data.glossario;
-        console.log("Sistema de Inteligência Conectado com Sucesso.");
-    } catch (e) { 
-        console.error("Erro ao conectar com a planilha. Verifique a URL."); 
-    }
+        db = await r.json();
+        console.log("Inteligência iGreen carregada. Contexto inicial: saudação");
+    } catch (e) { console.error("Erro ao conectar com a planilha."); }
 }
 
 function sendMessage() {
     const input = document.getElementById("user-input");
     const val = input.value.trim();
     if (!val) return;
-    
     addMessageToChat(val, "user");
     input.value = "";
-    
-    // Pequeno delay para simular pensamento
-    setTimeout(() => processLogic(val), 600);
+    processLogic(val);
 }
 
-function processLogic(text) {
-    const inputNormalizado = normalizarTexto(text);
-    
-    // 1. EXPANSÃO POR SINÔNIMOS (Glossário)
-    let termosDeBusca = [inputNormalizado];
-    
-    dbGlossario.forEach(item => {
-        const sinonimos = item.sinonimos.toString().toLowerCase().split(",").map(s => s.trim());
-        const contextosDoSinonimo = item.contexto.toString().toLowerCase().split(",").map(c => c.trim());
+function processLogic(userInput) {
+    const textoLimpo = normalizar(userInput);
 
-        // Se o usuário usou um sinônimo que pertence ao contexto atual ou ao geral
-        sinonimos.forEach(s => {
-            if (inputNormalizado.includes(s)) {
-                if (contextosDoSinonimo.includes(contextoAtual) || contextosDoSinonimo.includes("geral")) {
-                    termosDeBusca.push(item.palavra.toLowerCase());
+    // 1. TRADUÇÃO DE SINÔNIMOS (Baseado no contexto atual)
+    let textoProcessado = textoLimpo;
+    db.glossario.forEach(g => {
+        if (g.contexto.toLowerCase() === contextoAtual || g.contexto.toLowerCase() === "geral") {
+            const listaSinonimos = g.sinonimos.split(",").map(s => s.trim());
+            listaSinonimos.forEach(sin => {
+                if (textoLimpo.includes(sin) && sin.length > 0) {
+                    // Substitui o sinônimo pela palavra principal para facilitar o match
+                    textoProcessado = textoProcessado.replace(sin, g.palavra.toLowerCase());
                 }
-            }
-        });
+            });
+        }
     });
 
-    const textoFinalParaBusca = termosDeBusca.join(" ");
+    // 2. INFERÊNCIA DE CONTEXTO (Página 2)
+    // Se o bot detectar palavras de outro contexto, ele muda o contexto da conversa
+    let novoContextoDetectado = contextoAtual;
+    let maxContextScore = 0;
 
-    // 2. BUSCA POR PONTUAÇÃO
-    let melhorMatch = null;
-    let maiorScore = 0;
-
-    dbRespostas.forEach(item => {
+    db.contextos.forEach(c => {
         let score = 0;
-        const keywords = item.keywords.toString().toLowerCase().split(",").map(k => k.trim());
-        const perguntaPlanilha = item.pergunta.toString().toLowerCase();
-        const contextoItem = item.contexto.toString().toLowerCase().trim();
-
-        // Bonus por Contexto (Ajuda a desempatar)
-        if (contextoItem === contextoAtual) score += 2;
-
-        // Pontuação por palavras-chave
-        keywords.forEach(key => {
-            if (textoFinalParaBusca.includes(key) && key.length > 1) {
-                score += 5;
-            }
+        const keys = c.keywords.split(",").map(k => k.trim());
+        keys.forEach(k => {
+            if (textoProcessado.includes(k)) score++;
         });
 
-        // Pontuação por frase exata
-        if (inputNormalizado.includes(perguntaPlanilha) || perguntaPlanilha.includes(inputNormalizado)) {
-            score += 10;
-        }
-
-        if (score > maiorScore) {
-            maiorScore = score;
-            melhorMatch = item;
+        if (score > maxContextScore) {
+            maxContextScore = score;
+            novoContextoDetectado = c.contexto.toLowerCase();
         }
     });
 
-    // 3. RESPOSTA FINAL
-    if (melhorMatch && maiorScore >= 5) {
-        addMessageToChat(melhorMatch.resposta, "bot");
-        // Atualiza o contexto para a próxima pergunta
-        contextoAtual = melhorMatch.contexto.toLowerCase();
+    contextoAtual = novoContextoDetectado;
+    console.log("Contexto definido como:", contextoAtual);
+
+    // 3. BUSCA DE RESPOSTA (Página 1)
+    // Filtra apenas respostas do contexto atual
+    const respostasPossiveis = db.respostas.filter(r => r.contexto.toLowerCase() === contextoAtual);
+    
+    let melhorResposta = null;
+    let maxPalavrasIguais = -1;
+
+    respostasPossiveis.forEach(r => {
+        const palavrasPergunta = normalizar(r.pergunta).split(/\s+/);
+        let coincidencias = 0;
+        
+        palavrasPergunta.forEach(p => {
+            if (textoProcessado.includes(p)) coincidencias++;
+        });
+
+        if (coincidencias > maxPalavrasIguais) {
+            maxPalavrasIguais = coincidencias;
+            melhorResposta = r;
+        }
+    });
+
+    // 4. RESPOSTA FINAL
+    if (melhorResposta && maxPalavrasIguais > 0) {
+        addMessageToChat(melhorResposta.resposta, "bot");
     } else {
-        addMessageToChat("Desculpe, ainda não tenho informações sobre isso. Poderia tentar perguntar de outra forma ou falar sobre outro assunto?", "bot");
+        addMessageToChat("Desculpe, não consegui encontrar uma informação exata sobre isso no assunto '" + contextoAtual + "'. Pode tentar falar de outra forma?", "bot");
     }
 }
 
-function normalizarTexto(t) {
-    return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function normalizar(t) {
+    return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
 function addMessageToChat(text, sender) {
