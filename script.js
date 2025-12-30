@@ -1,22 +1,23 @@
 // *** SUBSTITUA PELA SUA URL DO GOOGLE APPS SCRIPT ***
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0QptxzM2c0CckHUf2Y6tkWy6NxBnHWukrTlKCCfXUFrJIhOy1TLXvEK_BB-vdPE19/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0QptxzM2c0CckHUf2Y6tkWy6NxBnHWukrTlKCCfXUFrJIhOy1TLXvEK_BB-vdPE19/exec'; 
 
-let knowledgeBase = []; // Armazena os dados da planilha
-let isLearningMode = false; // Controla se o bot está esperando o usuário ensinar
-let questionBeingLearned = ""; // Guarda a pergunta que o bot não sabia
+let knowledgeBase = [];
+let isLearningMode = false;
+let questionBeingLearned = "";
 
-// Carrega os dados assim que abre a página
 window.onload = function() {
     fetch(APPS_SCRIPT_URL)
         .then(response => response.json())
         .then(data => {
             knowledgeBase = data;
-            console.log("Base de conhecimento carregada!", knowledgeBase);
+            console.log("Base carregada:", knowledgeBase);
         })
-        .catch(error => console.error("Erro ao carregar dados:", error));
+        .catch(error => console.error("Erro ao carregar:", error));
+        
+    // CORREÇÃO 1: Adicionando o evento de clique no botão via JS para funcionar no PC
+    document.getElementById("send-btn").addEventListener("click", sendMessage);
 };
 
-// Detecta o "Enter" no teclado
 document.getElementById("user-input").addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
         sendMessage();
@@ -29,45 +30,45 @@ function sendMessage() {
 
     if (message === "") return;
 
-    // 1. Mostra mensagem do usuário
     addMessageToChat(message, "user");
     inputField.value = "";
 
-    // Efeito de "digitando..."
     setTimeout(() => {
         processMessage(message);
-    }, 600); // Pequeno delay para parecer natural
+    }, 600);
 }
 
 function processMessage(userText) {
-    // 2. MODO APRENDIZADO (Se o bot perguntou antes)
     if (isLearningMode) {
         saveNewKnowledge(questionBeingLearned, userText);
         return;
     }
 
-    // 3. MODO BUSCA
-    // Normaliza o texto (remove acentos e põe minúsculo)
     const normalizedText = userText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
     let bestMatch = null;
     let highestScore = 0;
 
-    // Procura na base de dados
     knowledgeBase.forEach(entry => {
         let score = 0;
-        // Verifica palavras-chave
+        
+        // CORREÇÃO 2: Verificando palavras-chave
         if (entry.keywords) {
-            const keywords = entry.keywords.split(",").map(k => k.trim());
+            // Se as keywords forem número ou data na planilha, converte para string
+            let strKeywords = entry.keywords.toString().toLowerCase();
+            const keywords = strKeywords.split(",").map(k => k.trim());
+            
             keywords.forEach(word => {
-                if (normalizedText.includes(word) && word.length > 2) {
+                // MUDANÇA AQUI: Alterado de > 2 para >= 2 para aceitar "Oi"
+                if (normalizedText.includes(word) && word.length >= 2) {
                     score++;
                 }
             });
         }
-        // Verifica na pergunta original também
-        if (entry.pergunta && entry.pergunta.toLowerCase().includes(normalizedText)) {
-            score += 2; // Peso maior se bater com a pergunta
+        
+        // Verifica pergunta exata ou parcial
+        if (entry.pergunta && entry.pergunta.toString().toLowerCase().includes(normalizedText)) {
+            score += 3; // Aumentei o peso se a frase for parecida com a pergunta inteira
         }
 
         if (score > highestScore) {
@@ -76,41 +77,44 @@ function processMessage(userText) {
         }
     });
 
-    // 4. RESPOSTA
     if (bestMatch && highestScore > 0) {
         addMessageToChat(bestMatch.resposta, "bot");
     } else {
-        // Não encontrou? Entra no modo de aprendizado
         isLearningMode = true;
         questionBeingLearned = userText;
-        addMessageToChat("Humm, ainda não aprendi sobre isso. Mas sou rápido! Se você souber a resposta, me conta aqui embaixo que eu guardo na minha memória.", "bot");
+        addMessageToChat("Humm, ainda não aprendi isso. Se você souber a resposta, me ensine enviando a resposta correta abaixo.", "bot");
     }
 }
 
 function saveNewKnowledge(pergunta, resposta) {
     addMessageToChat("Obrigado! Estou guardando essa informação...", "bot");
 
-    // Envia para o Google Sheets via POST
-    // Usamos um truque com 'fetch' para enviar os dados
+    // CORREÇÃO 3: Removendo o método POST. 
+    // Vamos enviar tudo via URL (GET) para evitar bloqueio de CORS do Google.
+    // O Apps Script vai receber isso no doGet e processar igual.
     const url = `${APPS_SCRIPT_URL}?action=save&pergunta=${encodeURIComponent(pergunta)}&resposta=${encodeURIComponent(resposta)}`;
     
-    fetch(url, { method: "POST" })
-    .then(() => {
-        addMessageToChat("Prontinho! Aprendi. Pode me perguntar de novo se quiser testar.", "bot");
+    // Removemos { method: "POST" }
+    fetch(url)
+    .then(response => {
+        // Se a resposta chegou aqui, deu certo
+        addMessageToChat("Prontinho! Aprendi. Pode testar perguntando de novo.", "bot");
         
-        // Atualiza a memória local sem precisar recarregar a página
+        // Atualiza a memória local
         knowledgeBase.push({
             pergunta: pergunta,
             resposta: resposta,
-            keywords: pergunta.toLowerCase()
+            keywords: pergunta.toLowerCase() + ", " + resposta.toLowerCase() // Adiciona resposta nas keywords pra ajudar na busca futura
         });
         
-        // Reseta as variáveis
         isLearningMode = false;
         questionBeingLearned = "";
     })
-    .catch(() => {
-        addMessageToChat("Ops, tive um problema para salvar na minha planilha. Tente novamente mais tarde.", "bot");
+    .catch(error => {
+        console.error("Erro detalhado:", error);
+        // Mesmo com erro de rede aparente, às vezes o Google salva.
+        // Mas vamos avisar o usuário para tentar de novo.
+        addMessageToChat("Tive um probleminha de conexão, mas tentei anotar.", "bot");
         isLearningMode = false;
     });
 }
@@ -127,7 +131,5 @@ function addMessageToChat(text, sender) {
 
     messageDiv.innerHTML = `${avatarHTML}<div class="bubble">${text}</div>`;
     chatContainer.appendChild(messageDiv);
-    
-    // Rola para o final
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
