@@ -2,27 +2,36 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iGreen Energy - Atendimento</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>Assistente iGreen</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <header>
-        <img src="https://igreenenergyteam.com.br/wp-content/uploads/2023/08/Ativo-4.png" alt="Logo iGreen Energy">
+    <header class="main-header">
+        <div class="logo-container">
+            <img src="https://igreenenergyteam.com.br/wp-content/uploads/2023/08/Ativo-4.png" alt="Logo iGreen" class="logo">
+        </div>
+        <a href="https://igreenconection-off.github.io/IGREENCONECTION" class="home-btn">Página principal</a>
     </header>
 
-    <main>
-        <div id="chat-container">
-            
-            <div id="chat-messages">
-                </div>
+    <div class="chat-header">
+        <div class="avatar-container">
+            <img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" alt="Avatar IA">
+        </div>
+        <span class="bot-name">Assistente IA iGreen</span>
+    </div>
 
-            <div id="chat-options">
-                </div>
-
+    <main class="chat-container" id="chat-container">
+        <div class="message bot-message">
+            <img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" class="msg-avatar">
+            <div class="bubble">Olá! Sou sua assistente virtual. Como posso ajudar você hoje com a iGreen?</div>
         </div>
     </main>
+
+    <footer class="input-area">
+        <input type="text" id="user-input" placeholder="Digite uma mensagem..." autocomplete="off">
+        <button id="send-btn" onclick="sendMessage()">➤</button>
+    </footer>
 
     <script src="script.js"></script>
 </body>
