@@ -1,87 +1,83 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlssLoEsrUQOoNogC-zv29uujWUnV-bV0D-g-OXRxpWWeUmsbrIjAetUVuTW5HjA33/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlssLoEsrUQOoNogC-zv29uujWUnV-bV0D-g-OXRxpWWeUmsbrIjAetUVuTW5HjA33/exec'; // <--- Verifique se a URL termina em /exec
 
 let dbRespostas = [];
 let dbGlossario = [];
-let contextoAtual = "geral"; 
-let isLearningMode = false;
-let lastUserMessage = "";
+let contextoAtual = "geral";
 
 window.onload = () => {
     loadData();
     document.getElementById("send-btn").onclick = sendMessage;
 };
 
+// Carrega os dados do Google Sheets
 async function loadData() {
     try {
         const r = await fetch(APPS_SCRIPT_URL);
         const data = await r.json();
         dbRespostas = data.respostas;
         dbGlossario = data.glossario;
-        console.log("Sistema de Inteligência Conectado.");
-    } catch (e) { console.error("Erro ao carregar banco."); }
+        console.log("Sistema de Inteligência Conectado com Sucesso.");
+    } catch (e) { 
+        console.error("Erro ao conectar com a planilha. Verifique a URL."); 
+    }
 }
 
 function sendMessage() {
     const input = document.getElementById("user-input");
     const val = input.value.trim();
     if (!val) return;
+    
     addMessageToChat(val, "user");
     input.value = "";
-    processLogic(val);
+    
+    // Pequeno delay para simular pensamento
+    setTimeout(() => processLogic(val), 600);
 }
 
 function processLogic(text) {
-    if (isLearningMode) {
-        saveNewKnowledge(lastUserMessage, text);
-        return;
-    }
-
     const inputNormalizado = normalizarTexto(text);
-    let palavrasDoUsuario = inputNormalizado.split(/\s+/);
     
-    // 1. EXPANSÃO POR SINÔNIMOS
-    // Adicionamos as "palavras-mestre" ao que o usuário disse baseado no glossário
-    let termosExpandidos = [...palavrasDoUsuario];
+    // 1. EXPANSÃO POR SINÔNIMOS (Glossário)
+    let termosDeBusca = [inputNormalizado];
+    
     dbGlossario.forEach(item => {
         const sinonimos = item.sinonimos.toString().toLowerCase().split(",").map(s => s.trim());
         const contextosDoSinonimo = item.contexto.toString().toLowerCase().split(",").map(c => c.trim());
 
-        // Se o usuário usou um sinônimo, adicionamos a palavra principal à busca
+        // Se o usuário usou um sinônimo que pertence ao contexto atual ou ao geral
         sinonimos.forEach(s => {
             if (inputNormalizado.includes(s)) {
-                termosExpandidos.push(item.palavra.toLowerCase());
-                // Se o sinônimo tem um contexto forte, isso ajuda a mudar o contexto
-                if (!contextosDoSinonimo.includes("geral")) {
-                    contextoAtual = contextosDoSinonimo[0]; 
+                if (contextosDoSinonimo.includes(contextoAtual) || contextosDoSinonimo.includes("geral")) {
+                    termosDeBusca.push(item.palavra.toLowerCase());
                 }
             }
         });
     });
 
-    const buscaFinal = termosExpandidos.join(" ");
+    const textoFinalParaBusca = termosDeBusca.join(" ");
 
-    // 2. BUSCA ROBUSTA (Pontuação por Relevância)
+    // 2. BUSCA POR PONTUAÇÃO
     let melhorMatch = null;
     let maiorScore = 0;
 
     dbRespostas.forEach(item => {
         let score = 0;
-        const ctxItem = item.contexto.toLowerCase().trim();
-        const keywords = item.keywords.toLowerCase().split(",").map(k => k.trim());
-        const perguntaItem = item.pergunta.toLowerCase();
+        const keywords = item.keywords.toString().toLowerCase().split(",").map(k => k.trim());
+        const perguntaPlanilha = item.pergunta.toString().toLowerCase();
+        const contextoItem = item.contexto.toString().toLowerCase().trim();
 
-        // Bonus por Contexto (Se for o contexto atual, ganha vantagem, mas não é obrigatório)
-        if (ctxItem === contextoAtual) score += 3;
+        // Bonus por Contexto (Ajuda a desempatar)
+        if (contextoItem === contextoAtual) score += 2;
 
-        // Pontos por palavras-chave (O coração da lógica)
+        // Pontuação por palavras-chave
         keywords.forEach(key => {
-            if (buscaFinal.includes(key) && key.length > 1) {
-                score += 5; // Cada palavra-chave encontrada vale muito
+            if (textoFinalParaBusca.includes(key) && key.length > 1) {
+                score += 5;
             }
         });
 
-        // Pontos por similaridade da frase
-        if (buscaFinal.includes(perguntaItem) || perguntaItem.includes(inputNormalizado)) {
+        // Pontuação por frase exata
+        if (inputNormalizado.includes(perguntaPlanilha) || perguntaPlanilha.includes(inputNormalizado)) {
             score += 10;
         }
 
@@ -91,41 +87,18 @@ function processLogic(text) {
         }
     });
 
-    // 3. DECISÃO E MUDANÇA DE CONTEXTO
-    // Aumentamos o threshold para 5 para evitar respostas aleatórias
+    // 3. RESPOSTA FINAL
     if (melhorMatch && maiorScore >= 5) {
         addMessageToChat(melhorMatch.resposta, "bot");
-        
-        // Se a resposta encontrada pertence a outro contexto, o bot "muda de assunto"
-        if (melhorMatch.contexto.toLowerCase() !== contextoAtual) {
-            console.log("Mudando contexto para: " + melhorMatch.contexto);
-            contextoAtual = melhorMatch.contexto.toLowerCase();
-        }
+        // Atualiza o contexto para a próxima pergunta
+        contextoAtual = melhorMatch.contexto.toLowerCase();
     } else {
-        isLearningMode = true;
-        lastUserMessage = text;
-        addMessageToChat("Humm, não tenho certeza se entendi. Isso tem a ver com " + contextoAtual + " ou é outro assunto? Se puder, me explique melhor para eu aprender!", "bot");
+        addMessageToChat("Desculpe, ainda não tenho informações sobre isso. Poderia tentar perguntar de outra forma ou falar sobre outro assunto?", "bot");
     }
 }
 
 function normalizarTexto(t) {
     return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-async function saveNewKnowledge(pergunta, resposta) {
-    addMessageToChat("Entendi! Vou guardar isso...", "bot");
-    
-    // Tenta adivinhar o contexto para salvar
-    const url = `${APPS_SCRIPT_URL}?action=save&pergunta=${encodeURIComponent(pergunta)}&resposta=${encodeURIComponent(resposta)}&contexto=${contextoAtual}&keywords=${encodeURIComponent(pergunta.toLowerCase())}`;
-    
-    try {
-        await fetch(url, { mode: 'no-cors' });
-        addMessageToChat("Prontinho! Aprendi que no contexto de " + contextoAtual + " a resposta é essa. Obrigado!", "bot");
-        isLearningMode = false;
-        loadData();
-    } catch (e) {
-        isLearningMode = false;
-    }
 }
 
 function addMessageToChat(text, sender) {
