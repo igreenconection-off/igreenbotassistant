@@ -1,5 +1,5 @@
 // *** SUBSTITUA PELA SUA URL DO GOOGLE APPS SCRIPT ***
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0QptxzM2c0CckHUf2Y6tkWy6NxBnHWukrTlKCCfXUFrJIhOy1TLXvEK_BB-vdPE19/exec'; 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxp-HbdWNqdcMEWuo__GPSShvgOp_0fvaLMGDv0NT_Q6jLguD9msl1eqor2Q8mdDXje/exec'; 
 
 let knowledgeBase = [];
 let isLearningMode = false;
