@@ -1,12 +1,17 @@
 // CONFIGURAÇÃO: Substitua pela sua chave do Google AI Studio
 const API_KEY = 'AIzaSyABq8rgWLgxbFfG6p9dnyBsqgxma4NUUZQ'; 
-const MODELO = 'gemini-1.5-flash'; // Modelo rápido e eficiente
+const MODELO = 'gemini-1.5-flash';
 
-// Aqui você define a "Personalidade" da IA (o que estava no seu arquivo de texto)
-const SYSTEM_PROMPT = `Você é a Assistente IA da iGreen Energy. 
-Seu público-alvo são idosos, então use linguagem simples, clara e respeitosa. 
-Nunca seja técnica demais. Seja descontraída e leve.
-Baseie suas respostas nestas informações da empresa: A iGreen Energy é uma empresa focada em soluções de sustentabilidade e economia, oferecendo uma variedade de serviços que abrangem energia renovável, telecomunicações e oportunidades de empreendedorismo.`;
+// Dados extraídos do seu PDF para alimentar a inteligência da IA
+const CONTEXTO_EMPRESA = `
+Você é a Assistente IA da iGreen Energy. Seu público são idosos, use linguagem simples.
+INFORMAÇÕES DA EMPRESA:
+- [cite_start]Conexão Green: Portabilidade de energia solar com desconto de até 15% na fatura[cite: 5, 6]. 
+- Requisitos: Consumo mín. [cite_start]130kWh (aprox. R$150), ser titular, não ter baixa renda/NIS, não ter placa solar e estar em dia[cite: 11, 12, 13, 14, 15].
+- [cite_start]Prazos: Até 90 dias para aprovação[cite: 22]. [cite_start]Se atrasar documentos, tem 30 dias para reenviar[cite: 18].
+- [cite_start]Produtos: Conexão Green, Solar (aluguel de telhado), Placas (venda), Livre (empresas), Telecom (internet 5G) e Expansão (franquia)[cite: 4, 36, 43, 46, 47, 54].
+- [cite_start]Suporte: WhatsApp wa.me/5584920039738 e Cancelamento 0800 000 6227[cite: 3, 25].
+`;
 
 window.onload = () => {
     document.getElementById("send-btn").addEventListener("click", sendMessage);
@@ -20,13 +25,11 @@ async function sendMessage() {
     const userText = input.value.trim();
     if (!userText) return;
 
-    // Exibe mensagem do usuário
     addMessageToChat(userText, "user");
     input.value = "";
 
-    // Mostra um "pensando..." temporário
     const typingId = "typing-" + Date.now();
-    addMessageToChat("Digitando...", "bot", typingId);
+    addMessageToChat("Analisando...", "bot", typingId);
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent?key=${API_KEY}`, {
@@ -34,21 +37,30 @@ async function sendMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{
-                    parts: [{ text: `${SYSTEM_PROMPT}\n\nPergunta do cliente: ${userText}` }]
-                }]
+                    role: "user",
+                    parts: [{ text: `Instruções: ${CONTEXTO_EMPRESA}\n\nPergunta do Cliente: ${userText}` }]
+                }],
+                generationConfig: {
+                    maxOutputTokens: 500,
+                    temperature: 0.7
+                }
             })
         });
 
         const data = await response.json();
-        const botResponse = data.candidates[0].content.parts[0].text;
+        
+        // Verifica se a API retornou erro de segurança ou chave
+        if (data.error) {
+            throw new Error(data.error.message);
+        }
 
-        // Remove o "digitando" e coloca a resposta real
+        const botResponse = data.candidates[0].content.parts[0].text;
         document.getElementById(typingId).remove();
         addMessageToChat(botResponse, "bot");
 
     } catch (error) {
-        console.error("Erro na API:", error);
-        document.getElementById(typingId).innerHTML = "<div class='bubble'>Ops! Tive um probleminha de conexão. Pode repetir?</div>";
+        console.error("Erro detalhado:", error);
+        document.getElementById(typingId).innerHTML = `<div class='bubble'>Infelizmente tive um erro técnico. Verifique se a sua chave API está correta ou tente novamente.</div>`;
     }
 }
 
@@ -57,9 +69,7 @@ function addMessageToChat(text, sender, id = null) {
     const div = document.createElement("div");
     div.className = `message ${sender}-message`;
     if (id) div.id = id;
-
     const avatar = sender === "bot" ? `<img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" class="msg-avatar">` : "";
-    
     div.innerHTML = `${avatar}<div class="bubble">${text}</div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
