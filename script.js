@@ -1,110 +1,65 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC_3EZ9Re6mwvdx1G6RJIlT803GOzQ4VgrhuV6eyIhhohgX6dHJhHeTrZ4u4qeAWBc/exec';
+// CONFIGURAÇÃO: Substitua pela sua chave do Google AI Studio
+const API_KEY = 'AIzaSyABq8rgWLgxbFfG6p9dnyBsqgxma4NUUZQ'; 
+const MODELO = 'gemini-1.5-flash'; // Modelo rápido e eficiente
 
-let db = { respostas: [], contextos: [], glossario: [] };
-let contextoAtual = "saudação";
+// Aqui você define a "Personalidade" da IA (o que estava no seu arquivo de texto)
+const SYSTEM_PROMPT = `Você é a Assistente IA da iGreen Energy. 
+Seu público-alvo são idosos, então use linguagem simples, clara e respeitosa. 
+Nunca seja técnica demais. Seja descontraída e leve.
+Baseie suas respostas nestas informações da empresa: A iGreen Energy é uma empresa focada em soluções de sustentabilidade e economia, oferecendo uma variedade de serviços que abrangem energia renovável, telecomunicações e oportunidades de empreendedorismo.`;
 
 window.onload = () => {
-    loadData();
-    // Garante que o botão Enviar e a tecla Enter funcionem
     document.getElementById("send-btn").addEventListener("click", sendMessage);
     document.getElementById("user-input").addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMessage();
     });
 };
 
-async function loadData() {
-    try {
-        const r = await fetch(APPS_SCRIPT_URL);
-        db = await r.json();
-        console.log("Inteligência iGreen carregada. Contexto inicial: saudação");
-    } catch (e) { console.error("Erro ao conectar com a planilha."); }
-}
-
-function sendMessage() {
+async function sendMessage() {
     const input = document.getElementById("user-input");
-    const val = input.value.trim();
-    if (!val) return;
-    addMessageToChat(val, "user");
+    const userText = input.value.trim();
+    if (!userText) return;
+
+    // Exibe mensagem do usuário
+    addMessageToChat(userText, "user");
     input.value = "";
-    processLogic(val);
-}
 
-function processLogic(userInput) {
-    const textoLimpo = normalizar(userInput);
+    // Mostra um "pensando..." temporário
+    const typingId = "typing-" + Date.now();
+    addMessageToChat("Digitando...", "bot", typingId);
 
-    // 1. TRADUÇÃO DE SINÔNIMOS (Baseado no contexto atual)
-    let textoProcessado = textoLimpo;
-    db.glossario.forEach(g => {
-        if (g.contexto.toLowerCase() === contextoAtual || g.contexto.toLowerCase() === "geral") {
-            const listaSinonimos = g.sinonimos.split(",").map(s => s.trim());
-            listaSinonimos.forEach(sin => {
-                if (textoLimpo.includes(sin) && sin.length > 0) {
-                    // Substitui o sinônimo pela palavra principal para facilitar o match
-                    textoProcessado = textoProcessado.replace(sin, g.palavra.toLowerCase());
-                }
-            });
-        }
-    });
-
-    // 2. INFERÊNCIA DE CONTEXTO (Página 2)
-    // Se o bot detectar palavras de outro contexto, ele muda o contexto da conversa
-    let novoContextoDetectado = contextoAtual;
-    let maxContextScore = 0;
-
-    db.contextos.forEach(c => {
-        let score = 0;
-        const keys = c.keywords.split(",").map(k => k.trim());
-        keys.forEach(k => {
-            if (textoProcessado.includes(k)) score++;
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: `${SYSTEM_PROMPT}\n\nPergunta do cliente: ${userText}` }]
+                }]
+            })
         });
 
-        if (score > maxContextScore) {
-            maxContextScore = score;
-            novoContextoDetectado = c.contexto.toLowerCase();
-        }
-    });
+        const data = await response.json();
+        const botResponse = data.candidates[0].content.parts[0].text;
 
-    contextoAtual = novoContextoDetectado;
-    console.log("Contexto definido como:", contextoAtual);
+        // Remove o "digitando" e coloca a resposta real
+        document.getElementById(typingId).remove();
+        addMessageToChat(botResponse, "bot");
 
-    // 3. BUSCA DE RESPOSTA (Página 1)
-    // Filtra apenas respostas do contexto atual
-    const respostasPossiveis = db.respostas.filter(r => r.contexto.toLowerCase() === contextoAtual);
-    
-    let melhorResposta = null;
-    let maxPalavrasIguais = -1;
-
-    respostasPossiveis.forEach(r => {
-        const palavrasPergunta = normalizar(r.pergunta).split(/\s+/);
-        let coincidencias = 0;
-        
-        palavrasPergunta.forEach(p => {
-            if (textoProcessado.includes(p)) coincidencias++;
-        });
-
-        if (coincidencias > maxPalavrasIguais) {
-            maxPalavrasIguais = coincidencias;
-            melhorResposta = r;
-        }
-    });
-
-    // 4. RESPOSTA FINAL
-    if (melhorResposta && maxPalavrasIguais > 0) {
-        addMessageToChat(melhorResposta.resposta, "bot");
-    } else {
-        addMessageToChat("Desculpe, não consegui encontrar uma informação exata sobre isso no assunto '" + contextoAtual + "'. Pode tentar falar de outra forma?", "bot");
+    } catch (error) {
+        console.error("Erro na API:", error);
+        document.getElementById(typingId).innerHTML = "<div class='bubble'>Ops! Tive um probleminha de conexão. Pode repetir?</div>";
     }
 }
 
-function normalizar(t) {
-    return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-}
-
-function addMessageToChat(text, sender) {
+function addMessageToChat(text, sender, id = null) {
     const container = document.getElementById("chat-container");
     const div = document.createElement("div");
     div.className = `message ${sender}-message`;
+    if (id) div.id = id;
+
     const avatar = sender === "bot" ? `<img src="https://c.topshort.org/aifacefy/ai_face_generator/template/1.webp" class="msg-avatar">` : "";
+    
     div.innerHTML = `${avatar}<div class="bubble">${text}</div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
