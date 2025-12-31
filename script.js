@@ -1,6 +1,6 @@
 // CONFIGURAÇÃO: Substitua pela sua chave do Google AI Studio
 const API_KEY = 'AIzaSyABq8rgWLgxbFfG6p9dnyBsqgxma4NUUZQ'; 
-const MODELO = 'gemini-2.5-flash';
+const MODELO = 'gemini-1.5-flash';
 
 // Dados extraídos do seu PDF para alimentar a inteligência da IA
 const CONTEXTO_EMPRESA = `
